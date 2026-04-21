@@ -172,6 +172,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:
 .toast.success{border-color:rgba(29,203,138,.3);color:var(--teal);}
 .toast.error{border-color:rgba(255,79,79,.3);color:var(--red);}
 
+.rec-name:hover .rename-hint{opacity:1 !important;}
+.rename-input{background:var(--bg3);border:1px solid var(--teal);border-radius:var(--r-s);padding:3px 8px;color:var(--text);font-size:13px;font-weight:500;font-family:var(--font-b);outline:none;width:100%;max-width:340px;}
+
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -215,9 +218,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:
       <div class="page-title" id="page-title">Live Session</div>
       <div class="page-sub" id="page-sub">Start recording your peer interview</div>
     </div>
-    <div class="user-chip">
-      <div class="av">JS</div>
-      <span>Jamie S.</span>
+    <div class="user-chip" onclick="openAccountModal()" title="Change account" style="cursor:pointer;">
+      <div class="av" id="user-av">JS</div>
+      <span id="user-name">Jamie S.</span>
+      <span style="font-size:10px;color:var(--text3);margin-left:2px;">✎</span>
+    </div>
+  </div>
+
+  <!-- ACCOUNT MODAL -->
+  <div id="account-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center;">
+    <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);padding:1.75rem;width:320px;display:flex;flex-direction:column;gap:1rem;">
+      <div style="font-family:var(--font-d);font-size:16px;font-weight:700;">Change account</div>
+      <div>
+        <div style="font-size:11px;font-family:var(--font-m);color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">Display name</div>
+        <input id="account-input" type="text" placeholder="e.g. Jamie S."
+          style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-s);padding:9px 12px;color:var(--text);font-size:13px;font-family:var(--font-b);outline:none;"
+          onkeydown="if(event.key==='Enter') saveAccount()"
+        />
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeAccountModal()" style="background:none;border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-s);padding:8px 16px;font-size:12px;cursor:pointer;font-family:var(--font-b);">Cancel</button>
+        <button onclick="saveAccount()" style="background:var(--teal);color:#051a0f;border:none;border-radius:var(--r-s);padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font-b);">Save</button>
+      </div>
     </div>
   </div>
 
@@ -443,6 +465,13 @@ function renderMetric(key, val) {
 
 // ===================== INIT =====================
 window.addEventListener('load', async () => {
+  // Restore saved account name
+  const savedName = localStorage.getItem('peerprep_account');
+  if (savedName) {
+    const initials = savedName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    setText('user-name', savedName);
+    setText('user-av', initials);
+  }
   updateQuestion();
   buildVoiceBars();
   buildQuestionBank();
@@ -819,7 +848,10 @@ function renderRecordings() {
     item.innerHTML = `
       <div class="rec-thumb" onclick="openPlayback(${rec.id})" title="Review recording">▶</div>
       <div class="rec-info">
-        <div class="rec-name">${rec.name}</div>
+        <div class="rec-name" onclick="startRename(${rec.id}, this)" title="Click to rename" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          ${rec.name}
+          <span style="font-size:10px;color:var(--text3);opacity:0;transition:opacity .2s;" class="rename-hint">✎</span>
+        </div>
         <div class="rec-meta">${rec.date} · ${rec.duration}</div>
       </div>
       <div class="rec-tags">
@@ -1020,7 +1052,70 @@ function showPage(page) {
   setText('page-sub',   subs[page]);
 }
 
-// ===================== TOAST =====================
+// ===================== RENAME RECORDING =====================
+function startRename(id, nameEl) {
+  // Prevent double-triggering if already editing
+  if (nameEl.querySelector('input')) return;
+
+  const rec = recordings.find(r => r.id === id);
+  if (!rec) return;
+
+  const input = document.createElement('input');
+  input.className = 'rename-input';
+  input.value = rec.name;
+  nameEl.innerHTML = '';
+  nameEl.appendChild(input);
+  input.focus();
+  input.select();
+
+  const commit = () => {
+    const newName = input.value.trim() || rec.name;
+    rec.name = newName;
+    saveRecordings();
+    renderRecordings();
+    // Also update playback panel title if this session is open
+    if (currentPlaybackId === id) setText('pb-title', newName);
+    toast('Session renamed', 'success');
+  };
+
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') {
+      input.removeEventListener('blur', commit);
+      renderRecordings(); // cancel — re-render without saving
+    }
+  });
+}
+
+
+function openAccountModal() {
+  el('account-input').value = el('user-name').textContent;
+  el('account-modal').style.display = 'flex';
+  setTimeout(() => el('account-input').focus(), 50);
+}
+
+function closeAccountModal() {
+  el('account-modal').style.display = 'none';
+}
+
+function saveAccount() {
+  const name = el('account-input').value.trim();
+  if (!name) return;
+  const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  setText('user-name', name);
+  setText('user-av', initials);
+  try { localStorage.setItem('peerprep_account', name); } catch(e) {}
+  closeAccountModal();
+  toast('Account updated', 'success');
+}
+
+// Close modal on backdrop click
+el('account-modal').addEventListener('click', e => {
+  if (e.target === el('account-modal')) closeAccountModal();
+});
+
+
 function toast(msg, type='') {
   const t = el('toast');
   t.textContent = msg;
