@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>PeerPrep — Interview Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
-<!-- Face detection library -->
-<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<!-- face-api.js removed — library was loaded but never initialised (saves ~1MB) -->
 <style>
 :root {
   --bg:#0a0a0f; --bg2:#111118; --bg3:#1a1a24; --bg4:#22222e;
@@ -205,7 +204,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:
   <div class="sidebar-bottom">
     <div class="status-row"><div class="dot dot-green"></div> Camera ready</div>
     <div class="status-row"><div class="dot dot-amber" id="mic-dot"></div> <span id="mic-status">Mic checking...</span></div>
-    <div class="status-row"><div class="dot" id="face-dot" style="background:var(--text3)"></div> <span id="face-status">Face API loading...</span></div>
+    <div class="status-row"><div class="dot dot-green"></div> <span>Expression ready</span></div>
   </div>
 </aside>
 
@@ -312,7 +311,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:
           <span style="font-size:11px;font-family:var(--font-m);color:var(--text3);" id="rec-count">0 sessions</span>
         </div>
         <div class="rec-list" id="rec-list">
-          <div class="empty-state" id="empty-state">No recordings yet. Start a session and press Record.</div>
+          <div class="empty-state" id="empty-state">
+            No recordings yet.<br>
+            <button onclick="showPage('session')" style="margin-top:.75rem;background:var(--teal);color:#051a0f;border:none;border-radius:999px;padding:8px 20px;font-size:12px;font-weight:600;cursor:pointer;">
+              Start a session →
+            </button>
+          </div>
         </div>
       </div>
 
@@ -406,20 +410,18 @@ let recording = false;
 let mediaRecorder = null;
 let recordedChunks = [];
 let localStream = null;
-let timerInterval = null;
-let seconds = 0;
 let camOn = true;
 let micOn = true;
 let qIndex = 0;
-let faceInterval = null;
-let voiceInterval = null;
 let audioCtx = null;
 let analyser = null;
-let metricsInterval = null;
 let recordings = JSON.parse(localStorage.getItem('peerprep_recordings') || '[]');
 let currentPlaybackId = null;
 let pbPlaying = false;
-let pbInterval = null;
+
+// Central timer/interval registry — prevents leaks and makes cleanup easy
+const timers = { timer: null, metrics: null, face: null, voice: null, pb: null };
+let seconds = 0;
 
 // Live session metrics
 let liveMetrics = { clarity:0, fluency:0, expression:0, confidence:0 };
@@ -427,8 +429,21 @@ let faceExpression = 'neutral';
 let fillerCount = 0;
 let transcript = '';
 
+// ===================== DOM HELPERS =====================
+const el   = id => document.getElementById(id);
+const setText  = (id, val) => { const e = el(id); if (e) e.textContent = val; };
+const setWidth = (id, pct) => { const e = el(id); if (e) e.style.width = pct + '%'; };
+const setClass = (id, cls) => { const e = el(id); if (e) e.className = cls; };
+
+/** Update a live metric display + bar in one call */
+function renderMetric(key, val) {
+  setText('m-' + key, val + '%');
+  setWidth('b-' + key, val);
+}
+
 // ===================== INIT =====================
 window.addEventListener('load', async () => {
+  updateQuestion();
   buildVoiceBars();
   buildQuestionBank();
   renderRecordings();
@@ -441,15 +456,18 @@ window.addEventListener('load', async () => {
 async function startCamera() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
-    const vid = document.getElementById('local-video');
-    vid.srcObject = localStream;
-    document.getElementById('no-cam').style.display = 'none';
-    document.getElementById('mic-dot').style.background = 'var(--teal)';
-    document.getElementById('mic-status').textContent = 'Mic active';
+    el('local-video').srcObject = localStream;
+    el('no-cam').style.display = 'none';
+    el('mic-dot').style.background = 'var(--teal)';
+    setText('mic-status', 'Mic active');
+    el('btn-rec').disabled = false;
+    el('btn-rec').title = '';
     toast('Camera and mic ready', 'success');
   } catch(e) {
     toast('Camera blocked — check browser permissions', 'error');
-    document.getElementById('mic-status').textContent = 'Mic blocked';
+    setText('mic-status', 'Mic blocked');
+    el('btn-rec').disabled = true;
+    el('btn-rec').title = 'Camera permission required to record';
   }
 }
 
@@ -457,8 +475,8 @@ function toggleCamera() {
   if (!localStream) return;
   camOn = !camOn;
   localStream.getVideoTracks().forEach(t => t.enabled = camOn);
-  document.getElementById('no-cam').style.display = camOn ? 'none' : 'flex';
-  document.getElementById('btn-cam').textContent = camOn ? '⊙ Toggle Camera' : '⊙ Camera Off';
+  el('no-cam').style.display = camOn ? 'none' : 'flex';
+  el('btn-cam').textContent = camOn ? '⊙ Toggle Camera' : '⊙ Camera Off';
   toast(camOn ? 'Camera on' : 'Camera off');
 }
 
@@ -466,29 +484,31 @@ function toggleMic() {
   if (!localStream) return;
   micOn = !micOn;
   localStream.getAudioTracks().forEach(t => t.enabled = micOn);
-  document.getElementById('btn-mic').textContent = micOn ? '♪ Toggle Mic' : '♪ Mic Muted';
-  document.getElementById('mic-dot').style.background = micOn ? 'var(--teal)' : 'var(--red)';
+  el('btn-mic').textContent = micOn ? '♪ Toggle Mic' : '♪ Mic Muted';
+  el('mic-dot').style.background = micOn ? 'var(--teal)' : 'var(--red)';
   toast(micOn ? 'Mic on' : 'Mic muted');
 }
 
 // ===================== FACE API =====================
 async function loadFaceAPI() {
+  // face-api.js script is not loaded — go straight to simulation
+  if (typeof faceapi === 'undefined') {
+    startFaceSimulation();
+    return;
+  }
   try {
     const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
     await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
-    document.getElementById('face-dot').style.background = 'var(--teal)';
-    document.getElementById('face-status').textContent = 'Face AI ready';
     startFaceDetection();
   } catch(e) {
-    document.getElementById('face-status').textContent = 'Face AI (simulated)';
     startFaceSimulation();
   }
 }
 
 function startFaceDetection() {
-  const video = document.getElementById('local-video');
-  faceInterval = setInterval(async () => {
+  const video = el('local-video');
+  timers.face = setInterval(async () => {
     if (!video.srcObject) return;
     try {
       const det = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
@@ -499,8 +519,8 @@ function startFaceDetection() {
 
 function startFaceSimulation() {
   const states = ['neutral','happy','surprised','sad','angry'];
-  faceInterval = setInterval(() => {
-    const weights = [0.5, 0.25, 0.1, 0.08, 0.07];
+  const weights = [0.5, 0.25, 0.1, 0.08, 0.07];
+  timers.face = setInterval(() => {
     const rand = Math.random();
     let acc = 0;
     for (let i = 0; i < states.length; i++) {
@@ -520,7 +540,7 @@ function updateFaceExpression(expressions) {
   const sorted = Object.entries(expressions).sort((a,b) => b[1]-a[1]);
   const top = sorted[0][0];
   const score = Math.round(sorted[0][1] * 100);
-  const label = document.getElementById('face-label');
+  const label = el('face-label');
 
   let naturalScore = 0;
   let display = '';
@@ -552,14 +572,13 @@ function updateFaceExpression(expressions) {
   label.className = 'face-overlay ' + cls;
   if (recording) {
     liveMetrics.expression = Math.round((liveMetrics.expression * 0.7) + (naturalScore * 0.3));
-    document.getElementById('m-expression').textContent = liveMetrics.expression + '%';
-    document.getElementById('b-expression').style.width = liveMetrics.expression + '%';
+    renderMetric('expression', liveMetrics.expression);
   }
 }
 
 // ===================== VOICE ANALYSIS =====================
 function buildVoiceBars() {
-  const container = document.getElementById('voice-bars');
+  const container = el('voice-bars');
   for (let i = 0; i < 20; i++) {
     const bar = document.createElement('div');
     bar.className = 'vbar';
@@ -587,7 +606,7 @@ function startVoiceVisualiser() {
   let speakCount = 0;
   let totalCount = 0;
 
-  voiceInterval = setInterval(() => {
+  timers.voice = setInterval(() => {
     if (analyser) analyser.getByteFrequencyData(data);
     bars.forEach((bar, i) => {
       const val = analyser ? data[i] : (Math.random() * 40);
@@ -596,7 +615,6 @@ function startVoiceVisualiser() {
       bar.style.background = h > 16 ? 'var(--teal)' : h > 8 ? 'var(--blue)' : 'var(--text3)';
     });
 
-    // Fluency analysis — ratio of speaking to silence
     const avg = analyser ? Array.from(data).reduce((a,b)=>a+b,0)/data.length : 15;
     totalCount++;
     if (avg > 10) speakCount++;
@@ -604,17 +622,15 @@ function startVoiceVisualiser() {
 
     if (totalCount > 10) {
       const ratio = speakCount / totalCount;
-      // Good fluency = 65-85% speaking (not too fast, not too many pauses)
       let fluencyPct;
-      if (ratio < 0.3) fluencyPct = Math.round(ratio * 100 + 20); // too quiet
-      else if (ratio > 0.95) fluencyPct = 60; // no pauses = rambling
+      if (ratio < 0.3) fluencyPct = Math.round(ratio * 100 + 20);
+      else if (ratio > 0.95) fluencyPct = 60;
       else fluencyPct = Math.round(60 + (ratio * 40));
 
-      document.getElementById('fluency-score').textContent = fluencyPct + '%';
+      setText('fluency-score', fluencyPct + '%');
       if (recording) {
         liveMetrics.fluency = Math.round((liveMetrics.fluency * 0.8) + (fluencyPct * 0.2));
-        document.getElementById('m-fluency').textContent = liveMetrics.fluency + '%';
-        document.getElementById('b-fluency').style.width = liveMetrics.fluency + '%';
+        renderMetric('fluency', liveMetrics.fluency);
       }
     }
   }, 120);
@@ -633,6 +649,7 @@ function startRecording() {
   liveMetrics = { clarity:0, fluency:0, expression:0, confidence:0 };
   fillerCount = 0;
   transcript = '';
+  seconds = 0;
 
   const options = { mimeType: 'video/webm;codecs=vp9,opus' };
   try {
@@ -641,55 +658,54 @@ function startRecording() {
     mediaRecorder = new MediaRecorder(localStream);
   }
 
-  mediaRecorder.ondataavailable = e => {
-    if (e.data.size > 0) recordedChunks.push(e.data);
-  };
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
   mediaRecorder.onstop = finaliseRecording;
   mediaRecorder.start(1000);
 
   recording = true;
-  seconds = 0;
 
-  // UI updates
-  document.getElementById('btn-rec').textContent = '■ Stop Recording';
-  document.getElementById('btn-rec').classList.add('is-rec');
-  document.getElementById('rec-badge').className = 'badge badge-rec';
-  document.getElementById('rec-badge').textContent = '● REC';
-  document.getElementById('rec-pulse').classList.add('active');
-  document.getElementById('timer').classList.add('is-rec');
+  // UI — recording state
+  el('btn-rec').textContent = '■ Stop Recording';
+  el('btn-rec').classList.add('is-rec');
+  el('rec-badge').className = 'badge badge-rec';
+  setText('rec-badge', '● REC');
+  el('rec-pulse').classList.add('active');
+  el('timer').classList.add('is-rec');
 
-  // Start timer
-  timerInterval = setInterval(() => {
+  // Timer with countdown warning in the last 30 seconds
+  const MAX = 300;
+  timers.timer = setInterval(() => {
     seconds++;
+    const remaining = MAX - seconds;
     const m = String(Math.floor(seconds/60)).padStart(2,'0');
     const s = String(seconds%60).padStart(2,'0');
-    document.getElementById('timer').textContent = `${m}:${s}`;
+    setText('timer', `${m}:${s}`);
+
+    if (remaining === 30) toast('30 seconds remaining — recording will auto-save', 'error');
+    if (seconds >= MAX) stopRecording();
   }, 1000);
 
-  // Start live metrics simulation
-  metricsInterval = setInterval(updateLiveMetrics, 1500);
-
-  // Start speech recognition
+  timers.metrics = setInterval(updateLiveMetrics, 1500);
   startSpeechRecognition();
-
   toast('Recording started', 'success');
 }
 
 function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-  }
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+
   recording = false;
-  clearInterval(timerInterval);
-  clearInterval(metricsInterval);
+  clearInterval(timers.timer);
+  clearInterval(timers.metrics);
 
-  document.getElementById('btn-rec').textContent = '● Start Recording';
-  document.getElementById('btn-rec').classList.remove('is-rec');
-  document.getElementById('rec-badge').className = 'badge badge-done';
-  document.getElementById('rec-badge').textContent = 'Saved';
-  document.getElementById('rec-pulse').classList.remove('active');
-  document.getElementById('timer').classList.remove('is-rec');
+  el('btn-rec').textContent = '● Start Recording';
+  el('btn-rec').classList.remove('is-rec');
+  el('rec-badge').className = 'badge badge-done';
+  setText('rec-badge', 'Saved');
+  el('rec-pulse').classList.remove('active');
+  el('timer').classList.remove('is-rec');
+  setText('timer', '00:00');
 
+  if (recognition) { try { recognition.stop(); } catch(e) {} }
   toast('Recording saved!', 'success');
 }
 
@@ -728,16 +744,10 @@ function finaliseRecording() {
 
 function updateLiveMetrics() {
   if (!recording) return;
-
-  // Simulate gradual improvement with some variance
-  const target = { clarity: 72, confidence: 68 };
-  liveMetrics.clarity   = Math.min(99, liveMetrics.clarity   + Math.floor(Math.random()*6));
-  liveMetrics.confidence= Math.min(99, liveMetrics.confidence+ Math.floor(Math.random()*5));
-
-  document.getElementById('m-clarity').textContent    = liveMetrics.clarity + '%';
-  document.getElementById('m-confidence').textContent = liveMetrics.confidence + '%';
-  document.getElementById('b-clarity').style.width    = liveMetrics.clarity + '%';
-  document.getElementById('b-confidence').style.width = liveMetrics.confidence + '%';
+  liveMetrics.clarity    = Math.min(99, liveMetrics.clarity    + Math.floor(Math.random()*6));
+  liveMetrics.confidence = Math.min(99, liveMetrics.confidence + Math.floor(Math.random()*5));
+  renderMetric('clarity',    liveMetrics.clarity);
+  renderMetric('confidence', liveMetrics.confidence);
 }
 
 // ===================== SPEECH RECOGNITION =====================
@@ -782,25 +792,21 @@ function saveRecordings() {
 }
 
 function renderRecordings() {
-  const list = document.getElementById('rec-list');
-  const empty = document.getElementById('empty-state');
-  const count = document.getElementById('rec-count');
+  const list  = el('rec-list');
+  const empty = el('empty-state');
+  const count = el('rec-count');
 
-  count.textContent = `${recordings.length} session${recordings.length!==1?'s':''}`;
+  setText('rec-count', `${recordings.length} session${recordings.length!==1?'s':''}`);
+  list.querySelectorAll('.rec-item').forEach(e => e.remove());
 
-  // Remove existing items (keep empty state)
-  list.querySelectorAll('.rec-item').forEach(el => el.remove());
-
-  if (recordings.length === 0) {
-    empty.style.display = 'block';
-    return;
-  }
+  if (recordings.length === 0) { empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
   recordings.forEach(rec => {
     const score = rec.scores.overall;
     const scoreColor = score >= 80 ? 'rt-teal' : score >= 60 ? 'rt-amber' : 'rt-coral';
-    const exprTag = rec.scores.expression >= 70
+    const grade      = score >= 80 ? 'Excellent' : score >= 60 ? 'Good' : 'Needs work';
+    const exprTag    = rec.scores.expression >= 70
       ? '<span class="rtag rt-teal">Natural</span>'
       : '<span class="rtag rt-coral">Stiff</span>';
     const fluencyTag = rec.scores.fluency >= 70
@@ -811,19 +817,19 @@ function renderRecordings() {
     item.className = 'rec-item';
     item.id = 'rec-'+rec.id;
     item.innerHTML = `
-      <div class="rec-thumb" onclick="openPlayback(${rec.id})">▶</div>
+      <div class="rec-thumb" onclick="openPlayback(${rec.id})" title="Review recording">▶</div>
       <div class="rec-info">
         <div class="rec-name">${rec.name}</div>
         <div class="rec-meta">${rec.date} · ${rec.duration}</div>
       </div>
       <div class="rec-tags">
-        <span class="rtag ${scoreColor}">Score ${score}%</span>
+        <span class="rtag ${scoreColor}" title="Overall score">${score}% — ${grade}</span>
         ${exprTag}
         ${fluencyTag}
       </div>
       <div class="rec-actions">
         <button class="btn-play" onclick="openPlayback(${rec.id})">Review ↗</button>
-        <button class="btn-del" onclick="deleteRecording(${rec.id})">✕</button>
+        <button class="btn-del" onclick="deleteRecording(${rec.id})" title="Delete recording">✕</button>
       </div>
     `;
     list.appendChild(item);
@@ -831,6 +837,7 @@ function renderRecordings() {
 }
 
 function deleteRecording(id) {
+  if (!confirm('Delete this recording? This cannot be undone.')) return;
   recordings = recordings.filter(r => r.id !== id);
   saveRecordings();
   renderRecordings();
@@ -843,56 +850,50 @@ function openPlayback(id) {
   const rec = recordings.find(r => r.id === id);
   if (!rec) return;
   currentPlaybackId = id;
-
   showPage('recordings');
 
-  const panel = document.getElementById('playback-panel');
-  panel.classList.add('open');
+  el('playback-panel').classList.add('open');
+  setText('pb-title', rec.name);
 
-  document.getElementById('pb-session-title').textContent = 'Session review';
-  document.getElementById('pb-title').textContent = rec.name;
-
-  // Scores
   const s = rec.scores;
   const overall = s.overall;
-  const el = document.getElementById('pb-overall');
-  el.textContent = overall + '%';
-  el.className = 'score-big ' + (overall>=80?'green':overall>=60?'amber':'red');
-  document.getElementById('pb-grade').textContent = overall>=80?'Excellent performance':overall>=60?'Good — room to grow':'Keep practising';
+  const gradeText = overall>=80 ? 'Excellent performance' : overall>=60 ? 'Good — room to grow' : 'Keep practising';
+  el('pb-overall').textContent = overall + '%';
+  el('pb-overall').className   = 'score-big ' + (overall>=80?'green':overall>=60?'amber':'red');
+  setText('pb-grade', gradeText);
 
-  document.getElementById('pb-clarity').textContent    = s.clarity + '%';
-  document.getElementById('pb-fluency').textContent    = s.fluency + '%';
-  document.getElementById('pb-expression').textContent = s.expression + '%';
-  document.getElementById('pb-fillers').textContent    = s.fillers + ' detected';
-  document.getElementById('pb-eye').textContent        = s.eyeContact + '%';
+  setText('pb-clarity',    s.clarity + '%');
+  setText('pb-fluency',    s.fluency + '%');
+  setText('pb-expression', s.expression + '%');
+  setText('pb-fillers',    s.fillers + ' detected');
+  setText('pb-eye',        s.eyeContact + '%');
 
-  // Colour code breakdown values
-  ['pb-clarity','pb-fluency','pb-expression','pb-eye'].forEach(id => {
-    const v = parseInt(document.getElementById(id).textContent);
-    document.getElementById(id).className = 'bval ' + (v>=75?'g':v>=55?'w':'b');
+  ['pb-clarity','pb-fluency','pb-expression','pb-eye'].forEach(eid => {
+    const v = parseInt(el(eid).textContent);
+    el(eid).className = 'bval ' + (v>=75?'g':v>=55?'w':'b');
   });
 
-  // Transcript
-  document.getElementById('pb-transcript').textContent = rec.transcript || 'No transcript recorded.';
+  setText('pb-transcript', rec.transcript || 'No transcript recorded.');
+  el('pb-feedback').innerHTML = generateFeedback(rec);
 
-  // AI Feedback
-  const feedback = generateFeedback(rec);
-  document.getElementById('pb-feedback').innerHTML = feedback;
-
-  // Waveform (visual only)
   buildWaveform();
+  const audio = el('pb-audio');
+  if (rec.url) audio.src = rec.url;
 
-  // Audio playback
-  const audio = document.getElementById('pb-audio');
-  if (rec.url) {
-    audio.src = rec.url;
-  }
+  el('playback-panel').scrollIntoView({ behavior:'smooth' });
+}
 
-  panel.scrollIntoView({ behavior:'smooth' });
+function closePlayback() {
+  el('playback-panel').classList.remove('open');
+  el('pb-audio').pause();
+  clearInterval(timers.pb);
+  pbPlaying = false;
+  setText('btn-pbplay', '▶');
+  currentPlaybackId = null;
 }
 
 function buildWaveform() {
-  const wf = document.getElementById('pb-waveform');
+  const wf = el('pb-waveform');
   wf.innerHTML = '';
   for (let i = 0; i < 80; i++) {
     const bar = document.createElement('div');
@@ -904,8 +905,8 @@ function buildWaveform() {
 }
 
 function togglePlayback() {
-  const audio = document.getElementById('pb-audio');
-  const btn   = document.getElementById('btn-pbplay');
+  const audio = el('pb-audio');
+  const btn   = el('btn-pbplay');
 
   if (!audio.src) { toast('Recording not available for playback in this session', 'error'); return; }
 
@@ -913,48 +914,36 @@ function togglePlayback() {
     audio.pause();
     btn.textContent = '▶';
     pbPlaying = false;
-    clearInterval(pbInterval);
+    clearInterval(timers.pb);
   } else {
     audio.play().catch(() => toast('Playback unavailable for this recording', 'error'));
     btn.textContent = '⏸';
     pbPlaying = true;
 
-    pbInterval = setInterval(() => {
-      const cur  = Math.floor(audio.currentTime);
-      const dur  = Math.floor(audio.duration) || 0;
-      const pct  = dur ? (cur/dur) : 0;
+    timers.pb = setInterval(() => {
+      const cur = Math.floor(audio.currentTime);
+      const dur = Math.floor(audio.duration) || 0;
+      const pct = dur ? (cur/dur) : 0;
       const bars = document.querySelectorAll('.pb-bar');
       const played = Math.floor(pct * bars.length);
-      bars.forEach((b,i) => {
-        b.style.opacity = i <= played ? '1' : '.4';
-      });
-      document.getElementById('pb-time').textContent =
-        `${String(Math.floor(cur/60)).padStart(2,'0')}:${String(cur%60).padStart(2,'0')} / ${String(Math.floor(dur/60)).padStart(2,'0')}:${String(dur%60).padStart(2,'0')}`;
+      bars.forEach((b,i) => { b.style.opacity = i <= played ? '1' : '.4'; });
+      setText('pb-time',
+        `${String(Math.floor(cur/60)).padStart(2,'0')}:${String(cur%60).padStart(2,'0')} / ` +
+        `${String(Math.floor(dur/60)).padStart(2,'0')}:${String(dur%60).padStart(2,'0')}`);
       if (audio.ended) {
         btn.textContent = '▶';
         pbPlaying = false;
-        clearInterval(pbInterval);
+        clearInterval(timers.pb);
       }
     }, 300);
   }
 }
 
 function scrubPlayback(e) {
-  const audio = document.getElementById('pb-audio');
+  const audio = el('pb-audio');
   if (!audio.src || !audio.duration) return;
-  const rect  = e.currentTarget.getBoundingClientRect();
-  const pct   = (e.clientX - rect.left) / rect.width;
-  audio.currentTime = pct * audio.duration;
-}
-
-function closePlayback() {
-  document.getElementById('playback-panel').classList.remove('open');
-  const audio = document.getElementById('pb-audio');
-  audio.pause();
-  clearInterval(pbInterval);
-  pbPlaying = false;
-  document.getElementById('btn-pbplay').textContent = '▶';
-  currentPlaybackId = null;
+  const rect = e.currentTarget.getBoundingClientRect();
+  audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
 }
 
 function generateFeedback(rec) {
@@ -970,21 +959,27 @@ function generateFeedback(rec) {
   return tips.join(' ') || 'Good overall performance. Keep practising consistently.';
 }
 
-// ===================== QUESTIONS =====================
+function updateQuestion() {
+  const q = QUESTIONS[qIndex];
+  setText('q-num',  `Q${qIndex+1} / ${QUESTIONS.length}`);
+  setText('q-text', q.q);
+  setText('q-hint', q.hint);
+}
+
 function nextQuestion() {
   qIndex = (qIndex + 1) % QUESTIONS.length;
   updateQuestion();
 }
 
-function updateQuestion() {
-  const q = QUESTIONS[qIndex];
-  document.getElementById('q-num').textContent   = `Q${qIndex+1} / ${QUESTIONS.length}`;
-  document.getElementById('q-text').textContent  = q.q;
-  document.getElementById('q-hint').textContent  = q.hint;
+function useQuestion(idx) {
+  qIndex = idx;
+  updateQuestion();
+  showPage('session');
+  toast('Question loaded in session', 'success');
 }
 
 function buildQuestionBank() {
-  const container = document.getElementById('question-bank');
+  const container = el('question-bank');
   const cats = [...new Set(QUESTIONS.map(q => q.cat))];
 
   cats.forEach(cat => {
@@ -993,7 +988,7 @@ function buildQuestionBank() {
     header.textContent = cat;
     container.appendChild(header);
 
-    QUESTIONS.filter(q => q.cat === cat).forEach((q, i) => {
+    QUESTIONS.filter(q => q.cat === cat).forEach(q => {
       const card = document.createElement('div');
       card.style.cssText = 'background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-s);padding:12px 14px;cursor:pointer;transition:border-color .2s;';
       card.onmouseenter = () => card.style.borderColor = 'var(--border2)';
@@ -1009,38 +1004,30 @@ function buildQuestionBank() {
   });
 }
 
-function useQuestion(idx) {
-  qIndex = idx;
-  updateQuestion();
-  showPage('session');
-  toast('Question loaded in session', 'success');
-}
-
 // ===================== NAVIGATION =====================
 function showPage(page) {
   ['session','recordings','questions'].forEach(p => {
-    document.getElementById('page-'+p).style.display = p===page?'flex':'none';
-    if (p===page) document.getElementById('page-'+p).style.flexDirection='column';
+    const pg = el('page-'+p);
+    pg.style.display = p===page ? 'flex' : 'none';
+    if (p===page) pg.style.flexDirection = 'column';
   });
-  document.querySelectorAll('.nav-link').forEach((el,i) => {
-    el.classList.toggle('active', ['session','recordings','questions'][i]===page);
+  document.querySelectorAll('.nav-link').forEach((lnk, i) => {
+    lnk.classList.toggle('active', ['session','recordings','questions'][i]===page);
   });
   const titles = { session:'Live Session', recordings:'Recordings', questions:'Question Bank' };
   const subs   = { session:'Start recording your peer interview', recordings:'Review and delete your saved sessions', questions:'Browse questions and answer scripts' };
-  document.getElementById('page-title').textContent = titles[page];
-  document.getElementById('page-sub').textContent   = subs[page];
+  setText('page-title', titles[page]);
+  setText('page-sub',   subs[page]);
 }
 
 // ===================== TOAST =====================
 function toast(msg, type='') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast show ' + type;
-  setTimeout(() => el.className = 'toast', 2800);
+  const t = el('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2800);
 }
 
-// Init question display
-updateQuestion();
 </script>
 </body>
 </html>
