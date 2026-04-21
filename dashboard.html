@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>PeerPrep — Interview Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<!-- Face detection library -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<style>
+:root {
+  --bg:#0a0a0f; --bg2:#111118; --bg3:#1a1a24; --bg4:#22222e;
+  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.13);
+  --text:#f0f0f8; --text2:#9090a8; --text3:#55556a;
+  --teal:#1dcb8a; --teal-d:rgba(29,203,138,0.12);
+  --coral:#f06b4a; --coral-d:rgba(240,107,74,0.12);
+  --amber:#f5b731; --amber-d:rgba(245,183,49,0.12);
+  --red:#ff4f4f; --red-d:rgba(255,79,79,0.12);
+  --purple:#8b6fff; --purple-d:rgba(139,111,255,0.12);
+  --blue:#4a9eff; --blue-d:rgba(74,158,255,0.12);
+  --font-d:'Syne',sans-serif; --font-b:'DM Sans',sans-serif; --font-m:'DM Mono',monospace;
+  --r:12px; --r-s:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;display:flex;height:100vh;overflow:hidden;}
+
+/* SIDEBAR */
+.sidebar{width:230px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0;flex-shrink:0;}
+.sidebar-logo{padding:1.25rem 1.25rem 0;font-family:var(--font-d);font-size:20px;font-weight:800;letter-spacing:-.02em;margin-bottom:1.5rem;}
+.sidebar-logo span{color:var(--teal);}
+.nav-section{font-size:10px;font-family:var(--font-m);color:var(--text3);text-transform:uppercase;letter-spacing:.1em;padding:0 1.25rem;margin-bottom:6px;}
+.nav-link{display:flex;align-items:center;gap:10px;padding:9px 1.25rem;color:var(--text2);font-size:13px;cursor:pointer;transition:background .15s,color .15s;border-left:2px solid transparent;}
+.nav-link:hover{background:var(--bg3);color:var(--text);}
+.nav-link.active{background:var(--teal-d);color:var(--teal);border-left-color:var(--teal);}
+.nav-icon{font-size:14px;width:16px;text-align:center;}
+.sidebar-bottom{margin-top:auto;padding:1rem 1.25rem;border-top:1px solid var(--border);}
+.status-row{display:flex;align-items:center;gap:8px;font-size:11px;font-family:var(--font-m);color:var(--text3);margin-bottom:6px;}
+.dot{width:7px;height:7px;border-radius:50%;}
+.dot-green{background:var(--teal);animation:pulse 2s infinite;}
+.dot-amber{background:var(--amber);}
+.dot-red{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* MAIN */
+.main{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+.topbar{padding:1.25rem 1.75rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg2);position:sticky;top:0;z-index:10;}
+.page-title{font-family:var(--font-d);font-size:20px;font-weight:800;letter-spacing:-.02em;}
+.page-sub{font-size:12px;color:var(--text3);margin-top:2px;}
+.user-chip{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border2);border-radius:999px;padding:5px 14px 5px 6px;font-size:13px;}
+.av{width:28px;height:28px;border-radius:50%;background:var(--purple-d);color:var(--purple);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
+.content{padding:1.5rem 1.75rem;display:flex;flex-direction:column;gap:1.25rem;}
+
+/* PANELS */
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:1px solid var(--border);}
+.panel-head h2{font-family:var(--font-d);font-size:14px;font-weight:700;}
+.badge{font-size:10px;font-family:var(--font-m);padding:3px 10px;border-radius:999px;}
+.badge-rec{background:var(--red-d);color:var(--red);animation:pulse 1.2s infinite;}
+.badge-ready{background:var(--bg3);color:var(--text3);}
+.badge-done{background:var(--teal-d);color:var(--teal);}
+
+/* SESSION AREA */
+.session-layout{display:grid;grid-template-columns:1fr 300px;min-height:260px;}
+.videos{display:grid;grid-template-columns:1fr 1fr;background:#050810;border-right:1px solid var(--border);}
+.video-slot{position:relative;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border);min-height:220px;}
+.video-slot:last-child{border-right:none;}
+.video-slot video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.video-label{position:absolute;bottom:8px;left:10px;font-size:10px;font-family:var(--font-m);color:rgba(255,255,255,.45);background:rgba(0,0,0,.5);padding:2px 7px;border-radius:4px;}
+.face-overlay{position:absolute;top:8px;right:8px;font-size:10px;font-family:var(--font-m);padding:3px 8px;border-radius:999px;transition:all .4s;}
+.face-neutral{background:var(--teal-d);color:var(--teal);}
+.face-smile{background:var(--amber-d);color:var(--amber);}
+.face-stress{background:var(--red-d);color:var(--red);}
+.no-cam{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text3);font-size:12px;}
+.no-cam-icon{font-size:28px;opacity:.4;}
+.rec-pulse{position:absolute;top:10px;left:10px;width:9px;height:9px;border-radius:50%;background:var(--red);display:none;}
+.rec-pulse.active{display:block;animation:pulse .9s infinite;}
+
+/* CONTROLS */
+.controls{padding:1.25rem;display:flex;flex-direction:column;gap:10px;}
+.btn-rec{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--teal);color:#051a0f;border:none;border-radius:var(--r-s);padding:11px;font-size:13px;font-weight:600;font-family:var(--font-b);cursor:pointer;transition:opacity .2s,background .2s;width:100%;}
+.btn-rec:hover{opacity:.85;}
+.btn-rec.is-rec{background:var(--red);color:#fff;}
+.btn-sec{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-s);padding:8px 12px;font-size:12px;font-family:var(--font-b);cursor:pointer;transition:border-color .2s,color .2s;width:100%;}
+.btn-sec:hover{border-color:var(--text2);color:var(--text);}
+.btn-sec:disabled{opacity:.35;cursor:not-allowed;}
+.timer{font-family:var(--font-m);font-size:26px;font-weight:500;color:var(--text2);text-align:center;letter-spacing:.05em;padding:4px 0;}
+.timer.is-rec{color:var(--red);}
+
+/* VOICE METER */
+.voice-box{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-s);padding:10px 12px;}
+.voice-label{font-size:10px;font-family:var(--font-m);color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;}
+.voice-bars{display:flex;align-items:flex-end;gap:3px;height:32px;}
+.vbar{width:5px;border-radius:2px;background:var(--teal);transition:height .1s;min-height:3px;}
+.fluency-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;font-family:var(--font-m);}
+.fluency-score{color:var(--teal);}
+.fluency-label{color:var(--text3);}
+
+/* QUESTION BOX */
+.q-box{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-s);padding:10px 12px;}
+.q-label{font-size:10px;font-family:var(--font-m);color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;}
+.q-num{font-size:10px;font-family:var(--font-m);color:var(--purple);margin-bottom:4px;}
+.q-text{font-size:13px;color:var(--text);line-height:1.5;margin-bottom:8px;}
+.q-hint{font-size:11px;color:var(--text3);font-style:italic;margin-bottom:8px;line-height:1.4;}
+.btn-next{background:none;border:none;color:var(--teal);font-size:11px;font-family:var(--font-b);cursor:pointer;padding:0;}
+
+/* METRICS */
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border);}
+.metric{background:var(--bg2);padding:.875rem 1rem;}
+.metric-label{font-size:10px;font-family:var(--font-m);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.metric-val{font-family:var(--font-d);font-size:22px;font-weight:800;color:var(--text);margin-bottom:6px;}
+.metric-bar{height:3px;background:var(--bg3);border-radius:2px;overflow:hidden;}
+.mfill{height:100%;border-radius:2px;transition:width 1s ease;width:0%;}
+.mfill-teal{background:var(--teal);}
+.mfill-amber{background:var(--amber);}
+.mfill-coral{background:var(--coral);}
+.mfill-blue{background:var(--blue);}
+
+/* RECORDINGS */
+.rec-list{display:flex;flex-direction:column;}
+.rec-item{display:flex;align-items:center;gap:12px;padding:.875rem 1.25rem;border-bottom:1px solid var(--border);transition:background .15s;}
+.rec-item:last-child{border-bottom:none;}
+.rec-item:hover{background:rgba(255,255,255,.02);}
+.rec-thumb{width:42px;height:42px;border-radius:var(--r-s);background:var(--bg3);display:flex;align-items:center;justify-content:center;color:var(--teal);font-size:16px;flex-shrink:0;cursor:pointer;transition:background .15s;}
+.rec-thumb:hover{background:var(--teal-d);}
+.rec-info{flex:1;}
+.rec-name{font-size:13px;font-weight:500;margin-bottom:2px;}
+.rec-meta{font-size:11px;font-family:var(--font-m);color:var(--text3);}
+.rec-tags{display:flex;gap:5px;flex-wrap:wrap;}
+.rtag{font-size:10px;font-family:var(--font-m);padding:2px 7px;border-radius:999px;}
+.rt-teal{background:var(--teal-d);color:var(--teal);}
+.rt-amber{background:var(--amber-d);color:var(--amber);}
+.rt-coral{background:var(--coral-d);color:var(--coral);}
+.rt-red{background:var(--red-d);color:var(--red);}
+.rec-actions{display:flex;gap:6px;}
+.btn-play{background:none;border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-s);padding:5px 12px;font-size:11px;cursor:pointer;font-family:var(--font-b);transition:border-color .2s,color .2s;}
+.btn-play:hover{border-color:var(--teal);color:var(--teal);}
+.btn-del{background:none;border:1px solid var(--border2);color:var(--text3);border-radius:var(--r-s);padding:5px 10px;font-size:11px;cursor:pointer;font-family:var(--font-b);transition:border-color .2s,color .2s;}
+.btn-del:hover{border-color:var(--red);color:var(--red);}
+.empty-state{padding:2.5rem;text-align:center;color:var(--text3);font-size:13px;}
+
+/* PLAYBACK PANEL */
+.playback-panel{display:none;}
+.playback-panel.open{display:block;}
+.pb-inner{padding:1.25rem;}
+.pb-player{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:1.25rem;}
+.pb-title{font-size:14px;font-weight:500;margin-bottom:.75rem;}
+.pb-waveform{height:48px;background:var(--bg);border-radius:var(--r-s);margin-bottom:.75rem;display:flex;align-items:center;padding:0 12px;gap:2px;cursor:pointer;overflow:hidden;}
+.pb-bar{width:3px;border-radius:1px;background:var(--teal);opacity:.5;transition:opacity .2s;}
+.pb-bar.played{opacity:1;}
+.pb-controls{display:flex;align-items:center;gap:10px;}
+.btn-pbplay{background:var(--teal);color:#051a0f;border:none;border-radius:999px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;}
+.pb-time{font-family:var(--font-m);font-size:11px;color:var(--text3);flex:1;}
+.pb-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+.pb-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-s);padding:1rem;}
+.pb-card-title{font-size:10px;font-family:var(--font-m);color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.75rem;}
+.score-big{font-family:var(--font-d);font-size:40px;font-weight:800;margin-bottom:4px;}
+.score-big.green{color:var(--teal);}
+.score-big.amber{color:var(--amber);}
+.score-big.red{color:var(--coral);}
+.breakdown-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);}
+.breakdown-row:last-child{border-bottom:none;}
+.bval{font-family:var(--font-m);font-size:11px;}
+.bval.g{color:var(--teal);}.bval.w{color:var(--amber);}.bval.b{color:var(--coral);}
+.transcript-box{grid-column:1/-1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-s);padding:1rem;}
+.transcript-text{font-size:13px;color:var(--text2);line-height:1.8;font-style:italic;}
+.ai-feedback{grid-column:1/-1;background:var(--purple-d);border:1px solid rgba(139,111,255,.2);border-radius:var(--r-s);padding:1rem;}
+.ai-feedback p{font-size:13px;color:var(--text2);line-height:1.7;}
+.ai-feedback strong{color:var(--text);}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r-s);padding:10px 18px;font-size:13px;font-family:var(--font-m);color:var(--text);z-index:999;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.success{border-color:rgba(29,203,138,.3);color:var(--teal);}
+.toast.error{border-color:rgba(255,79,79,.3);color:var(--red);}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px;}
+
+@media(max-width:900px){
+  .session-layout{grid-template-columns:1fr;}
+  .videos{grid-template-columns:1fr;}
+  .metrics-grid{grid-template-columns:1fr 1fr;}
+  body{flex-direction:column;}
+  .sidebar{width:100%;flex-direction:row;height:auto;}
+}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">Peer<span>Prep</span></div>
+  <div class="nav-section">Menu</div>
+  <div class="nav-link active" onclick="showPage('session')">
+    <span class="nav-icon">▶</span> Live Session
+  </div>
+  <div class="nav-link" onclick="showPage('recordings')">
+    <span class="nav-icon">◈</span> Recordings
+  </div>
+  <div class="nav-link" onclick="showPage('questions')">
+    <span class="nav-icon">?</span> Questions
+  </div>
+  <div class="sidebar-bottom">
+    <div class="status-row"><div class="dot dot-green"></div> Camera ready</div>
+    <div class="status-row"><div class="dot dot-amber" id="mic-dot"></div> <span id="mic-status">Mic checking...</span></div>
+    <div class="status-row"><div class="dot" id="face-dot" style="background:var(--text3)"></div> <span id="face-status">Face API loading...</span></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title" id="page-title">Live Session</div>
+      <div class="page-sub" id="page-sub">Start recording your peer interview</div>
+    </div>
+    <div class="user-chip">
+      <div class="av">JS</div>
+      <span>Jamie S.</span>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ===== SESSION PAGE ===== -->
+    <div id="page-session">
+
+      <!-- Live session panel -->
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Interview session</h2>
+          <span class="badge badge-ready" id="rec-badge">Ready</span>
+        </div>
+        <div class="session-layout">
+          <div class="videos">
+            <div class="video-slot">
+              <video id="local-video" autoplay muted playsinline></video>
+              <div class="no-cam" id="no-cam"><div class="no-cam-icon">◎</div><span>Camera off</span></div>
+              <div class="rec-pulse" id="rec-pulse"></div>
+              <div class="video-label">You</div>
+              <div class="face-overlay face-neutral" id="face-label">● Neutral</div>
+            </div>
+            <div class="video-slot">
+              <video id="remote-video" autoplay playsinline></video>
+              <div class="no-cam"><div class="no-cam-icon">◎</div><span>Waiting for peer</span></div>
+              <div class="video-label">Peer</div>
+            </div>
+          </div>
+          <div class="controls">
+            <button class="btn-rec" id="btn-rec" onclick="toggleRecording()">
+              ● Start Recording
+            </button>
+            <button class="btn-sec" id="btn-cam" onclick="toggleCamera()">⊙ Toggle Camera</button>
+            <button class="btn-sec" id="btn-mic" onclick="toggleMic()">♪ Toggle Mic</button>
+            <div class="timer" id="timer">00:00</div>
+
+            <!-- Voice meter -->
+            <div class="voice-box">
+              <div class="voice-label">Voice analysis</div>
+              <div class="voice-bars" id="voice-bars"></div>
+              <div class="fluency-row">
+                <span class="fluency-label">Fluency</span>
+                <span class="fluency-score" id="fluency-score">--</span>
+              </div>
+            </div>
+
+            <!-- Question -->
+            <div class="q-box">
+              <div class="q-label">Current question</div>
+              <div class="q-num" id="q-num">Q1 / 10</div>
+              <div class="q-text" id="q-text">Tell me about yourself.</div>
+              <div class="q-hint" id="q-hint">Use the STAR method: Situation, Task, Action, Result.</div>
+              <button class="btn-next" onclick="nextQuestion()">Next question →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metrics row -->
+        <div class="metrics-grid">
+          <div class="metric">
+            <div class="metric-label">Clarity</div>
+            <div class="metric-val" id="m-clarity">--</div>
+            <div class="metric-bar"><div class="mfill mfill-teal" id="b-clarity"></div></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Fluency</div>
+            <div class="metric-val" id="m-fluency">--</div>
+            <div class="metric-bar"><div class="mfill mfill-blue" id="b-fluency"></div></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Expression</div>
+            <div class="metric-val" id="m-expression">--</div>
+            <div class="metric-bar"><div class="mfill mfill-amber" id="b-expression"></div></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Confidence</div>
+            <div class="metric-val" id="m-confidence">--</div>
+            <div class="metric-bar"><div class="mfill mfill-coral" id="b-confidence"></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end session page -->
+
+    <!-- ===== RECORDINGS PAGE ===== -->
+    <div id="page-recordings" style="display:none;">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Saved recordings</h2>
+          <span style="font-size:11px;font-family:var(--font-m);color:var(--text3);" id="rec-count">0 sessions</span>
+        </div>
+        <div class="rec-list" id="rec-list">
+          <div class="empty-state" id="empty-state">No recordings yet. Start a session and press Record.</div>
+        </div>
+      </div>
+
+      <!-- Playback panel -->
+      <div class="panel playback-panel" id="playback-panel">
+        <div class="panel-head">
+          <h2 id="pb-session-title">Session review</h2>
+          <button class="btn-sec" style="width:auto;padding:5px 14px;" onclick="closePlayback()">✕ Close</button>
+        </div>
+        <div class="pb-inner">
+          <div class="pb-player">
+            <div class="pb-title" id="pb-title">Recording</div>
+            <div class="pb-waveform" id="pb-waveform" onclick="scrubPlayback(event)"></div>
+            <div class="pb-controls">
+              <button class="btn-pbplay" id="btn-pbplay" onclick="togglePlayback()">▶</button>
+              <span class="pb-time" id="pb-time">0:00 / 0:00</span>
+              <audio id="pb-audio" style="display:none;"></audio>
+            </div>
+          </div>
+          <div class="pb-grid">
+            <div class="pb-card">
+              <div class="pb-card-title">Overall score</div>
+              <div class="score-big green" id="pb-overall">--</div>
+              <div style="font-size:12px;color:var(--text3);" id="pb-grade">--</div>
+            </div>
+            <div class="pb-card">
+              <div class="pb-card-title">Breakdown</div>
+              <div class="breakdown-row"><span>Clarity</span><span class="bval g" id="pb-clarity">--</span></div>
+              <div class="breakdown-row"><span>Fluency</span><span class="bval g" id="pb-fluency">--</span></div>
+              <div class="breakdown-row"><span>Expression</span><span class="bval w" id="pb-expression">--</span></div>
+              <div class="breakdown-row"><span>Filler words</span><span class="bval w" id="pb-fillers">--</span></div>
+              <div class="breakdown-row"><span>Eye contact</span><span class="bval g" id="pb-eye">--</span></div>
+            </div>
+            <div class="transcript-box">
+              <div class="pb-card-title">Transcript</div>
+              <div class="transcript-text" id="pb-transcript">--</div>
+            </div>
+            <div class="ai-feedback">
+              <div class="pb-card-title" style="color:var(--purple);">AI feedback</div>
+              <p id="pb-feedback">--</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- end recordings page -->
+
+    <!-- ===== QUESTIONS PAGE ===== -->
+    <div id="page-questions" style="display:none;">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Interview question bank</h2>
+          <span style="font-size:11px;font-family:var(--font-m);color:var(--text3);">30 questions · 3 categories</span>
+        </div>
+        <div id="question-bank" style="padding:1.25rem;display:flex;flex-direction:column;gap:.75rem;"></div>
+      </div>
+    </div>
+
+  </div><!-- end content -->
+</main>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===================== DATA =====================
+const QUESTIONS = [
+  { cat:"Behavioural", q:"Tell me about yourself and your background.", hint:"Keep it under 2 minutes. Cover education, experience, and why you're here.", script:"Start with your degree/background, mention 1-2 key projects, then connect to the role." },
+  { cat:"Behavioural", q:"Describe a time you worked under pressure.", hint:"Use STAR method: Situation, Task, Action, Result.", script:"Pick a real deadline story. Focus on what YOU did, not the team." },
+  { cat:"Behavioural", q:"What is your greatest strength?", hint:"Be specific — give a concrete example, not just an adjective.", script:"Name the strength → give one example → connect to this role." },
+  { cat:"Behavioural", q:"Tell me about a time you failed. What did you learn?", hint:"Don't pick something trivial. Show self-awareness and growth.", script:"Describe the failure honestly, then pivot hard to what changed after it." },
+  { cat:"Behavioural", q:"How do you handle disagreements with teammates?", hint:"Show that you can resolve conflict professionally.", script:"Give an example. Emphasise listening first, then finding common ground." },
+  { cat:"Behavioural", q:"Where do you see yourself in 5 years?", hint:"Be ambitious but realistic. Tie it back to this company.", script:"Show growth mindset. Mention skills you want to build here." },
+  { cat:"Behavioural", q:"Why do you want this role?", hint:"Do your research — mention something specific about the company.", script:"Company reason + role reason + your skills = perfect fit." },
+  { cat:"Behavioural", q:"Describe your ideal work environment.", hint:"Be honest but professional. Avoid criticising past employers.", script:"Focus on collaboration, feedback culture, and learning opportunities." },
+  { cat:"Technical", q:"Walk me through a recent project you built.", hint:"Cover the problem, your approach, the tech stack, and the outcome.", script:"Problem → decision you made → result you measured. Keep it concrete." },
+  { cat:"Technical", q:"How do you approach debugging a problem you've never seen before?", hint:"Show your systematic thinking process.", script:"Reproduce → isolate → hypothesise → test → fix. Give a real example." },
+  { cat:"Technical", q:"Explain a complex technical concept to a non-technical person.", hint:"Pick something you genuinely understand deeply.", script:"Use an analogy. Check for understanding. Adjust your language in real-time." },
+  { cat:"Technical", q:"How do you ensure your code is secure?", hint:"Relevant especially for the cybersecurity role in your team.", script:"Input validation → auth → encryption → dependency audits → testing." },
+  { cat:"Technical", q:"Describe how you would design a system from scratch.", hint:"Think aloud — interviewers want to see your reasoning process.", script:"Requirements → constraints → high-level design → components → trade-offs." },
+  { cat:"Technical", q:"What's the hardest technical problem you've solved?", hint:"Be specific. Numbers and impact make it memorable.", script:"Set the scene quickly, spend 70% of time on YOUR solution and reasoning." },
+  { cat:"Situational", q:"You discover a major bug in production 30 minutes before a demo. What do you do?", hint:"Show calm, prioritisation, and communication skills.", script:"Assess severity → communicate upward → hotfix or rollback → post-mortem." },
+  { cat:"Situational", q:"A teammate is consistently missing deadlines. How do you handle it?", hint:"Don't throw colleagues under the bus. Show empathy first.", script:"Private conversation first → understand root cause → escalate only if needed." },
+  { cat:"Situational", q:"You're given a task with unclear requirements. What do you do?", hint:"Show that you ask the right questions before diving in.", script:"Clarify assumptions → document them → confirm with stakeholder → then build." },
+  { cat:"Situational", q:"How would you prioritise when you have three urgent tasks at once?", hint:"Show a framework — impact vs effort, deadlines, dependencies.", script:"Assess impact → check deadlines → communicate constraints → deliver incrementally." },
+  { cat:"Situational", q:"What would you do if you disagreed with your manager's technical decision?", hint:"Show that you can advocate professionally without being difficult.", script:"Understand their reasoning first → present data → accept the final call gracefully." },
+  { cat:"Situational", q:"How would you onboard yourself to a new codebase quickly?", hint:"Show initiative and structured learning approach.", script:"README → architecture docs → run it locally → read tests → make a small change." },
+];
+
+// ===================== STATE =====================
+let recording = false;
+let mediaRecorder = null;
+let recordedChunks = [];
+let localStream = null;
+let timerInterval = null;
+let seconds = 0;
+let camOn = true;
+let micOn = true;
+let qIndex = 0;
+let faceInterval = null;
+let voiceInterval = null;
+let audioCtx = null;
+let analyser = null;
+let metricsInterval = null;
+let recordings = JSON.parse(localStorage.getItem('peerprep_recordings') || '[]');
+let currentPlaybackId = null;
+let pbPlaying = false;
+let pbInterval = null;
+
+// Live session metrics
+let liveMetrics = { clarity:0, fluency:0, expression:0, confidence:0 };
+let faceExpression = 'neutral';
+let fillerCount = 0;
+let transcript = '';
+
+// ===================== INIT =====================
+window.addEventListener('load', async () => {
+  buildVoiceBars();
+  buildQuestionBank();
+  renderRecordings();
+  await startCamera();
+  await loadFaceAPI();
+  initAudioAnalyser();
+});
+
+// ===================== CAMERA =====================
+async function startCamera() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+    const vid = document.getElementById('local-video');
+    vid.srcObject = localStream;
+    document.getElementById('no-cam').style.display = 'none';
+    document.getElementById('mic-dot').style.background = 'var(--teal)';
+    document.getElementById('mic-status').textContent = 'Mic active';
+    toast('Camera and mic ready', 'success');
+  } catch(e) {
+    toast('Camera blocked — check browser permissions', 'error');
+    document.getElementById('mic-status').textContent = 'Mic blocked';
+  }
+}
+
+function toggleCamera() {
+  if (!localStream) return;
+  camOn = !camOn;
+  localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+  document.getElementById('no-cam').style.display = camOn ? 'none' : 'flex';
+  document.getElementById('btn-cam').textContent = camOn ? '⊙ Toggle Camera' : '⊙ Camera Off';
+  toast(camOn ? 'Camera on' : 'Camera off');
+}
+
+function toggleMic() {
+  if (!localStream) return;
+  micOn = !micOn;
+  localStream.getAudioTracks().forEach(t => t.enabled = micOn);
+  document.getElementById('btn-mic').textContent = micOn ? '♪ Toggle Mic' : '♪ Mic Muted';
+  document.getElementById('mic-dot').style.background = micOn ? 'var(--teal)' : 'var(--red)';
+  toast(micOn ? 'Mic on' : 'Mic muted');
+}
+
+// ===================== FACE API =====================
+async function loadFaceAPI() {
+  try {
+    const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+    document.getElementById('face-dot').style.background = 'var(--teal)';
+    document.getElementById('face-status').textContent = 'Face AI ready';
+    startFaceDetection();
+  } catch(e) {
+    document.getElementById('face-status').textContent = 'Face AI (simulated)';
+    startFaceSimulation();
+  }
+}
+
+function startFaceDetection() {
+  const video = document.getElementById('local-video');
+  faceInterval = setInterval(async () => {
+    if (!video.srcObject) return;
+    try {
+      const det = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+      if (det) updateFaceExpression(det.expressions);
+    } catch(e) {}
+  }, 800);
+}
+
+function startFaceSimulation() {
+  const states = ['neutral','happy','surprised','sad','angry'];
+  faceInterval = setInterval(() => {
+    const weights = [0.5, 0.25, 0.1, 0.08, 0.07];
+    const rand = Math.random();
+    let acc = 0;
+    for (let i = 0; i < states.length; i++) {
+      acc += weights[i];
+      if (rand < acc) { simulateFace(states[i]); break; }
+    }
+  }, 2000);
+}
+
+function simulateFace(expr) {
+  const mock = {};
+  mock[expr] = 0.9;
+  updateFaceExpression(mock);
+}
+
+function updateFaceExpression(expressions) {
+  const sorted = Object.entries(expressions).sort((a,b) => b[1]-a[1]);
+  const top = sorted[0][0];
+  const score = Math.round(sorted[0][1] * 100);
+  const label = document.getElementById('face-label');
+
+  let naturalScore = 0;
+  let display = '';
+  let cls = '';
+
+  if (top === 'happy' || top === 'surprised') {
+    display = `● Smiling (${score}%)`;
+    cls = 'face-smile';
+    naturalScore = 85 + Math.floor(Math.random()*15);
+    faceExpression = 'smile';
+  } else if (top === 'angry' || top === 'disgusted' || top === 'fearful') {
+    display = `● Stressed (${score}%)`;
+    cls = 'face-stress';
+    naturalScore = 30 + Math.floor(Math.random()*25);
+    faceExpression = 'stress';
+  } else if (top === 'sad') {
+    display = `● Uneasy (${score}%)`;
+    cls = 'face-stress';
+    naturalScore = 45 + Math.floor(Math.random()*20);
+    faceExpression = 'stress';
+  } else {
+    display = `● Neutral (${score}%)`;
+    cls = 'face-neutral';
+    naturalScore = 70 + Math.floor(Math.random()*20);
+    faceExpression = 'neutral';
+  }
+
+  label.textContent = display;
+  label.className = 'face-overlay ' + cls;
+  if (recording) {
+    liveMetrics.expression = Math.round((liveMetrics.expression * 0.7) + (naturalScore * 0.3));
+    document.getElementById('m-expression').textContent = liveMetrics.expression + '%';
+    document.getElementById('b-expression').style.width = liveMetrics.expression + '%';
+  }
+}
+
+// ===================== VOICE ANALYSIS =====================
+function buildVoiceBars() {
+  const container = document.getElementById('voice-bars');
+  for (let i = 0; i < 20; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'vbar';
+    bar.style.height = '4px';
+    container.appendChild(bar);
+  }
+}
+
+function initAudioAnalyser() {
+  if (!localStream) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(localStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 64;
+    src.connect(analyser);
+    startVoiceVisualiser();
+  } catch(e) {}
+}
+
+function startVoiceVisualiser() {
+  const bars = document.querySelectorAll('.vbar');
+  const data = new Uint8Array(analyser ? analyser.frequencyBinCount : 20);
+  let silenceCount = 0;
+  let speakCount = 0;
+  let totalCount = 0;
+
+  voiceInterval = setInterval(() => {
+    if (analyser) analyser.getByteFrequencyData(data);
+    bars.forEach((bar, i) => {
+      const val = analyser ? data[i] : (Math.random() * 40);
+      const h = Math.max(3, Math.min(32, val * 0.13));
+      bar.style.height = h + 'px';
+      bar.style.background = h > 16 ? 'var(--teal)' : h > 8 ? 'var(--blue)' : 'var(--text3)';
+    });
+
+    // Fluency analysis — ratio of speaking to silence
+    const avg = analyser ? Array.from(data).reduce((a,b)=>a+b,0)/data.length : 15;
+    totalCount++;
+    if (avg > 10) speakCount++;
+    else silenceCount++;
+
+    if (totalCount > 10) {
+      const ratio = speakCount / totalCount;
+      // Good fluency = 65-85% speaking (not too fast, not too many pauses)
+      let fluencyPct;
+      if (ratio < 0.3) fluencyPct = Math.round(ratio * 100 + 20); // too quiet
+      else if (ratio > 0.95) fluencyPct = 60; // no pauses = rambling
+      else fluencyPct = Math.round(60 + (ratio * 40));
+
+      document.getElementById('fluency-score').textContent = fluencyPct + '%';
+      if (recording) {
+        liveMetrics.fluency = Math.round((liveMetrics.fluency * 0.8) + (fluencyPct * 0.2));
+        document.getElementById('m-fluency').textContent = liveMetrics.fluency + '%';
+        document.getElementById('b-fluency').style.width = liveMetrics.fluency + '%';
+      }
+    }
+  }, 120);
+}
+
+// ===================== RECORDING =====================
+function toggleRecording() {
+  if (!recording) startRecording();
+  else stopRecording();
+}
+
+function startRecording() {
+  if (!localStream) { toast('Camera not available', 'error'); return; }
+
+  recordedChunks = [];
+  liveMetrics = { clarity:0, fluency:0, expression:0, confidence:0 };
+  fillerCount = 0;
+  transcript = '';
+
+  const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+  try {
+    mediaRecorder = new MediaRecorder(localStream, options);
+  } catch(e) {
+    mediaRecorder = new MediaRecorder(localStream);
+  }
+
+  mediaRecorder.ondataavailable = e => {
+    if (e.data.size > 0) recordedChunks.push(e.data);
+  };
+  mediaRecorder.onstop = finaliseRecording;
+  mediaRecorder.start(1000);
+
+  recording = true;
+  seconds = 0;
+
+  // UI updates
+  document.getElementById('btn-rec').textContent = '■ Stop Recording';
+  document.getElementById('btn-rec').classList.add('is-rec');
+  document.getElementById('rec-badge').className = 'badge badge-rec';
+  document.getElementById('rec-badge').textContent = '● REC';
+  document.getElementById('rec-pulse').classList.add('active');
+  document.getElementById('timer').classList.add('is-rec');
+
+  // Start timer
+  timerInterval = setInterval(() => {
+    seconds++;
+    const m = String(Math.floor(seconds/60)).padStart(2,'0');
+    const s = String(seconds%60).padStart(2,'0');
+    document.getElementById('timer').textContent = `${m}:${s}`;
+  }, 1000);
+
+  // Start live metrics simulation
+  metricsInterval = setInterval(updateLiveMetrics, 1500);
+
+  // Start speech recognition
+  startSpeechRecognition();
+
+  toast('Recording started', 'success');
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  recording = false;
+  clearInterval(timerInterval);
+  clearInterval(metricsInterval);
+
+  document.getElementById('btn-rec').textContent = '● Start Recording';
+  document.getElementById('btn-rec').classList.remove('is-rec');
+  document.getElementById('rec-badge').className = 'badge badge-done';
+  document.getElementById('rec-badge').textContent = 'Saved';
+  document.getElementById('rec-pulse').classList.remove('active');
+  document.getElementById('timer').classList.remove('is-rec');
+
+  toast('Recording saved!', 'success');
+}
+
+function finaliseRecording() {
+  const blob = new Blob(recordedChunks, { type:'video/webm' });
+  const url  = URL.createObjectURL(blob);
+  const duration = seconds;
+
+  // Compute final scores
+  const overall = Math.round((liveMetrics.clarity + liveMetrics.fluency + liveMetrics.expression + liveMetrics.confidence) / 4);
+  const eyeContact = Math.round(65 + Math.random()*25);
+
+  const rec = {
+    id: Date.now(),
+    name: `Interview session — ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`,
+    date: new Date().toLocaleDateString(),
+    duration: `${String(Math.floor(duration/60)).padStart(2,'0')}:${String(duration%60).padStart(2,'0')}`,
+    url,
+    scores: {
+      overall: overall || 72,
+      clarity: liveMetrics.clarity || Math.round(65+Math.random()*25),
+      fluency: liveMetrics.fluency || Math.round(60+Math.random()*30),
+      expression: liveMetrics.expression || Math.round(55+Math.random()*35),
+      confidence: liveMetrics.confidence || Math.round(60+Math.random()*30),
+      fillers: fillerCount,
+      eyeContact,
+    },
+    transcript: transcript || 'No transcript available — speech recognition may not be supported in this browser.',
+    question: QUESTIONS[qIndex].q,
+  };
+
+  recordings.unshift(rec);
+  saveRecordings();
+  renderRecordings();
+}
+
+function updateLiveMetrics() {
+  if (!recording) return;
+
+  // Simulate gradual improvement with some variance
+  const target = { clarity: 72, confidence: 68 };
+  liveMetrics.clarity   = Math.min(99, liveMetrics.clarity   + Math.floor(Math.random()*6));
+  liveMetrics.confidence= Math.min(99, liveMetrics.confidence+ Math.floor(Math.random()*5));
+
+  document.getElementById('m-clarity').textContent    = liveMetrics.clarity + '%';
+  document.getElementById('m-confidence').textContent = liveMetrics.confidence + '%';
+  document.getElementById('b-clarity').style.width    = liveMetrics.clarity + '%';
+  document.getElementById('b-confidence').style.width = liveMetrics.confidence + '%';
+}
+
+// ===================== SPEECH RECOGNITION =====================
+let recognition = null;
+function startSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  const FILLERS = ['um','uh','like','you know','basically','literally','actually','right','so','well'];
+
+  recognition.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        transcript += t + ' ';
+        // Count fillers
+        FILLERS.forEach(f => {
+          const regex = new RegExp('\\b'+f+'\\b','gi');
+          const matches = t.match(regex);
+          if (matches) fillerCount += matches.length;
+        });
+      } else {
+        interim = t;
+      }
+    }
+  };
+
+  recognition.onerror = () => {};
+  recognition.start();
+}
+
+// ===================== SAVE / LOAD =====================
+function saveRecordings() {
+  // Store metadata only (not blob URLs — they don't survive reload)
+  const meta = recordings.map(r => ({...r, url: null}));
+  try { localStorage.setItem('peerprep_recordings', JSON.stringify(meta)); } catch(e) {}
+}
+
+function renderRecordings() {
+  const list = document.getElementById('rec-list');
+  const empty = document.getElementById('empty-state');
+  const count = document.getElementById('rec-count');
+
+  count.textContent = `${recordings.length} session${recordings.length!==1?'s':''}`;
+
+  // Remove existing items (keep empty state)
+  list.querySelectorAll('.rec-item').forEach(el => el.remove());
+
+  if (recordings.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  recordings.forEach(rec => {
+    const score = rec.scores.overall;
+    const scoreColor = score >= 80 ? 'rt-teal' : score >= 60 ? 'rt-amber' : 'rt-coral';
+    const exprTag = rec.scores.expression >= 70
+      ? '<span class="rtag rt-teal">Natural</span>'
+      : '<span class="rtag rt-coral">Stiff</span>';
+    const fluencyTag = rec.scores.fluency >= 70
+      ? '<span class="rtag rt-teal">Fluent</span>'
+      : '<span class="rtag rt-amber">Needs work</span>';
+
+    const item = document.createElement('div');
+    item.className = 'rec-item';
+    item.id = 'rec-'+rec.id;
+    item.innerHTML = `
+      <div class="rec-thumb" onclick="openPlayback(${rec.id})">▶</div>
+      <div class="rec-info">
+        <div class="rec-name">${rec.name}</div>
+        <div class="rec-meta">${rec.date} · ${rec.duration}</div>
+      </div>
+      <div class="rec-tags">
+        <span class="rtag ${scoreColor}">Score ${score}%</span>
+        ${exprTag}
+        ${fluencyTag}
+      </div>
+      <div class="rec-actions">
+        <button class="btn-play" onclick="openPlayback(${rec.id})">Review ↗</button>
+        <button class="btn-del" onclick="deleteRecording(${rec.id})">✕</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+}
+
+function deleteRecording(id) {
+  recordings = recordings.filter(r => r.id !== id);
+  saveRecordings();
+  renderRecordings();
+  if (currentPlaybackId === id) closePlayback();
+  toast('Recording deleted');
+}
+
+// ===================== PLAYBACK =====================
+function openPlayback(id) {
+  const rec = recordings.find(r => r.id === id);
+  if (!rec) return;
+  currentPlaybackId = id;
+
+  showPage('recordings');
+
+  const panel = document.getElementById('playback-panel');
+  panel.classList.add('open');
+
+  document.getElementById('pb-session-title').textContent = 'Session review';
+  document.getElementById('pb-title').textContent = rec.name;
+
+  // Scores
+  const s = rec.scores;
+  const overall = s.overall;
+  const el = document.getElementById('pb-overall');
+  el.textContent = overall + '%';
+  el.className = 'score-big ' + (overall>=80?'green':overall>=60?'amber':'red');
+  document.getElementById('pb-grade').textContent = overall>=80?'Excellent performance':overall>=60?'Good — room to grow':'Keep practising';
+
+  document.getElementById('pb-clarity').textContent    = s.clarity + '%';
+  document.getElementById('pb-fluency').textContent    = s.fluency + '%';
+  document.getElementById('pb-expression').textContent = s.expression + '%';
+  document.getElementById('pb-fillers').textContent    = s.fillers + ' detected';
+  document.getElementById('pb-eye').textContent        = s.eyeContact + '%';
+
+  // Colour code breakdown values
+  ['pb-clarity','pb-fluency','pb-expression','pb-eye'].forEach(id => {
+    const v = parseInt(document.getElementById(id).textContent);
+    document.getElementById(id).className = 'bval ' + (v>=75?'g':v>=55?'w':'b');
+  });
+
+  // Transcript
+  document.getElementById('pb-transcript').textContent = rec.transcript || 'No transcript recorded.';
+
+  // AI Feedback
+  const feedback = generateFeedback(rec);
+  document.getElementById('pb-feedback').innerHTML = feedback;
+
+  // Waveform (visual only)
+  buildWaveform();
+
+  // Audio playback
+  const audio = document.getElementById('pb-audio');
+  if (rec.url) {
+    audio.src = rec.url;
+  }
+
+  panel.scrollIntoView({ behavior:'smooth' });
+}
+
+function buildWaveform() {
+  const wf = document.getElementById('pb-waveform');
+  wf.innerHTML = '';
+  for (let i = 0; i < 80; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'pb-bar';
+    const h = 8 + Math.random() * 32;
+    bar.style.cssText = `width:3px;border-radius:1px;background:var(--teal);opacity:.4;height:${h}px;flex-shrink:0;`;
+    wf.appendChild(bar);
+  }
+}
+
+function togglePlayback() {
+  const audio = document.getElementById('pb-audio');
+  const btn   = document.getElementById('btn-pbplay');
+
+  if (!audio.src) { toast('Recording not available for playback in this session', 'error'); return; }
+
+  if (pbPlaying) {
+    audio.pause();
+    btn.textContent = '▶';
+    pbPlaying = false;
+    clearInterval(pbInterval);
+  } else {
+    audio.play().catch(() => toast('Playback unavailable for this recording', 'error'));
+    btn.textContent = '⏸';
+    pbPlaying = true;
+
+    pbInterval = setInterval(() => {
+      const cur  = Math.floor(audio.currentTime);
+      const dur  = Math.floor(audio.duration) || 0;
+      const pct  = dur ? (cur/dur) : 0;
+      const bars = document.querySelectorAll('.pb-bar');
+      const played = Math.floor(pct * bars.length);
+      bars.forEach((b,i) => {
+        b.style.opacity = i <= played ? '1' : '.4';
+      });
+      document.getElementById('pb-time').textContent =
+        `${String(Math.floor(cur/60)).padStart(2,'0')}:${String(cur%60).padStart(2,'0')} / ${String(Math.floor(dur/60)).padStart(2,'0')}:${String(dur%60).padStart(2,'0')}`;
+      if (audio.ended) {
+        btn.textContent = '▶';
+        pbPlaying = false;
+        clearInterval(pbInterval);
+      }
+    }, 300);
+  }
+}
+
+function scrubPlayback(e) {
+  const audio = document.getElementById('pb-audio');
+  if (!audio.src || !audio.duration) return;
+  const rect  = e.currentTarget.getBoundingClientRect();
+  const pct   = (e.clientX - rect.left) / rect.width;
+  audio.currentTime = pct * audio.duration;
+}
+
+function closePlayback() {
+  document.getElementById('playback-panel').classList.remove('open');
+  const audio = document.getElementById('pb-audio');
+  audio.pause();
+  clearInterval(pbInterval);
+  pbPlaying = false;
+  document.getElementById('btn-pbplay').textContent = '▶';
+  currentPlaybackId = null;
+}
+
+function generateFeedback(rec) {
+  const s = rec.scores;
+  const tips = [];
+  if (s.fluency < 65) tips.push('<strong>Fluency:</strong> You had noticeable pauses. Practise answering out loud daily — even just 2 minutes in the mirror.');
+  else tips.push('<strong>Fluency:</strong> Good speech flow. Keep it up.');
+  if (s.expression < 65) tips.push('<strong>Expression:</strong> Your face appeared tense. Try smiling slightly at the start — it signals confidence and relaxes your muscles.');
+  else tips.push('<strong>Expression:</strong> Natural facial expressions detected. This builds rapport with interviewers.');
+  if (s.fillers > 5) tips.push(`<strong>Filler words:</strong> ${s.fillers} fillers detected (um, uh, like). Replace them with a brief pause — silence sounds more confident than fillers.`);
+  if (s.eyeContact < 70) tips.push('<strong>Eye contact:</strong> Look directly at the camera, not at your own face on screen. It reads as direct eye contact to the interviewer.');
+  if (s.clarity >= 75) tips.push('<strong>Clarity:</strong> Your answer structure was clear and well-organised.');
+  return tips.join(' ') || 'Good overall performance. Keep practising consistently.';
+}
+
+// ===================== QUESTIONS =====================
+function nextQuestion() {
+  qIndex = (qIndex + 1) % QUESTIONS.length;
+  updateQuestion();
+}
+
+function updateQuestion() {
+  const q = QUESTIONS[qIndex];
+  document.getElementById('q-num').textContent   = `Q${qIndex+1} / ${QUESTIONS.length}`;
+  document.getElementById('q-text').textContent  = q.q;
+  document.getElementById('q-hint').textContent  = q.hint;
+}
+
+function buildQuestionBank() {
+  const container = document.getElementById('question-bank');
+  const cats = [...new Set(QUESTIONS.map(q => q.cat))];
+
+  cats.forEach(cat => {
+    const header = document.createElement('div');
+    header.style.cssText = 'font-size:11px;font-family:var(--font-m);color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:.5rem;margin-bottom:6px;';
+    header.textContent = cat;
+    container.appendChild(header);
+
+    QUESTIONS.filter(q => q.cat === cat).forEach((q, i) => {
+      const card = document.createElement('div');
+      card.style.cssText = 'background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-s);padding:12px 14px;cursor:pointer;transition:border-color .2s;';
+      card.onmouseenter = () => card.style.borderColor = 'var(--border2)';
+      card.onmouseleave = () => card.style.borderColor = 'var(--border)';
+      card.innerHTML = `
+        <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px;">${q.q}</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">${q.hint}</div>
+        <div style="font-size:11px;font-family:var(--font-m);color:var(--purple);">Script: ${q.script}</div>
+        <button onclick="useQuestion(${QUESTIONS.indexOf(q)})" style="margin-top:8px;background:none;border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;font-family:var(--font-b);">Use this question →</button>
+      `;
+      container.appendChild(card);
+    });
+  });
+}
+
+function useQuestion(idx) {
+  qIndex = idx;
+  updateQuestion();
+  showPage('session');
+  toast('Question loaded in session', 'success');
+}
+
+// ===================== NAVIGATION =====================
+function showPage(page) {
+  ['session','recordings','questions'].forEach(p => {
+    document.getElementById('page-'+p).style.display = p===page?'flex':'none';
+    if (p===page) document.getElementById('page-'+p).style.flexDirection='column';
+  });
+  document.querySelectorAll('.nav-link').forEach((el,i) => {
+    el.classList.toggle('active', ['session','recordings','questions'][i]===page);
+  });
+  const titles = { session:'Live Session', recordings:'Recordings', questions:'Question Bank' };
+  const subs   = { session:'Start recording your peer interview', recordings:'Review and delete your saved sessions', questions:'Browse questions and answer scripts' };
+  document.getElementById('page-title').textContent = titles[page];
+  document.getElementById('page-sub').textContent   = subs[page];
+}
+
+// ===================== TOAST =====================
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  setTimeout(() => el.className = 'toast', 2800);
+}
+
+// Init question display
+updateQuestion();
+</script>
+</body>
+</html>

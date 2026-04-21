@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PeerPrep — Peer Interview Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-logo">PeerPrep</div>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#team">Team</a>
+      <a href="#setup">Setup</a>
+      <a href="dashboard.html" class="nav-cta">Open Dashboard</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-grid-bg"></div>
+    <div class="hero-content">
+      <div class="hero-tag">Built in VS Code · 3-person team · 1 day</div>
+      <h1 class="hero-title">Record. Review.<br><span class="accent">Get better.</span></h1>
+      <p class="hero-sub">A peer interview platform for students. Record sessions, play back your performance, and get AI critique on communication skills — secured end-to-end.</p>
+      <div class="hero-btns">
+        <a href="dashboard.html" class="btn-primary">Start a session</a>
+        <a href="#setup" class="btn-ghost">Setup guide ↓</a>
+      </div>
+      <div class="hero-badges">
+        <span class="badge badge-teal">Mechatronics</span>
+        <span class="badge badge-coral">Cybersecurity</span>
+        <span class="badge badge-amber">Electric car</span>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="mock-card">
+        <div class="mock-header">
+          <div class="mock-dot red"></div>
+          <div class="mock-dot yellow"></div>
+          <div class="mock-dot green"></div>
+          <span class="mock-title">Live session</span>
+        </div>
+        <div class="mock-video">
+          <div class="rec-ring"></div>
+          <div class="mock-avatar">A</div>
+          <div class="rec-label">● REC 02:34</div>
+        </div>
+        <div class="mock-scores">
+          <div class="score-row"><span>Clarity</span><div class="score-bar"><div class="score-fill" style="width:82%"></div></div><span>82%</span></div>
+          <div class="score-row"><span>Pace</span><div class="score-bar"><div class="score-fill amber" style="width:67%"></div></div><span>67%</span></div>
+          <div class="score-row"><span>Structure</span><div class="score-bar"><div class="score-fill" style="width:91%"></div></div><span>91%</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="section-label">What it does</div>
+    <h2 class="section-title">Three disciplines. One platform.</h2>
+    <div class="features-grid">
+      <div class="feature-card teal">
+        <div class="feature-icon">⬡</div>
+        <h3>Mechatronics</h3>
+        <p>Raspberry Pi pod triggers recording via GPIO button. LED ring shows session state. Door sensor auto-stops on privacy breach.</p>
+        <div class="feature-tags">
+          <span>Raspberry Pi 5</span><span>GPIO</span><span>ffmpeg</span><span>MQTT</span>
+        </div>
+      </div>
+      <div class="feature-card coral">
+        <div class="feature-icon">⬡</div>
+        <h3>Cybersecurity</h3>
+        <p>JWT-authenticated API. DTLS-SRTP encrypted WebRTC. RBAC roles for students and instructors. Zero critical vulnerabilities (Snyk-verified).</p>
+        <div class="feature-tags">
+          <span>JWT</span><span>SRTP</span><span>RBAC</span><span>OWASP</span>
+        </div>
+      </div>
+      <div class="feature-card amber">
+        <div class="feature-icon">⬡</div>
+        <h3>Electric car</h3>
+        <p>EV charging station acts as the IoT power hub. Publishes battery state over MQTT. Pod gracefully shuts down recording when power drops below 10%.</p>
+        <div class="feature-tags">
+          <span>OCPP</span><span>CAN bus</span><span>MQTT</span><span>SoC</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TEAM -->
+  <section class="team" id="team">
+    <div class="section-label">The team</div>
+    <h2 class="section-title">Who builds what</h2>
+    <div class="team-grid">
+      <div class="team-card you">
+        <div class="you-badge">You</div>
+        <div class="team-avatar teal-av">M</div>
+        <h3>Mechatronics</h3>
+        <p class="team-sub">Intermediate · VS Code + Python</p>
+        <ul>
+          <li>Wire the interview pod</li>
+          <li>Write pod_controller.py</li>
+          <li>MQTT publish pod/status</li>
+          <li>ffmpeg recording trigger</li>
+        </ul>
+        <div class="team-file">firmware/pod_controller.py</div>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar coral-av">C</div>
+        <h3>Cybersecurity</h3>
+        <p class="team-sub">VS Code + TypeScript</p>
+        <ul>
+          <li>Build JWT middleware</li>
+          <li>Configure coturn DTLS</li>
+          <li>RBAC student/instructor</li>
+          <li>Run OWASP ZAP scan</li>
+        </ul>
+        <div class="team-file">server/src/auth.ts</div>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar amber-av">E</div>
+        <h3>Electric car</h3>
+        <p class="team-sub">VS Code + Node.js</p>
+        <ul>
+          <li>OCPP WebSocket server</li>
+          <li>CAN bus SoC reading</li>
+          <li>MQTT publish ev/power</li>
+          <li>Low-power pod shutdown</li>
+        </ul>
+        <div class="team-file">server/src/ev_hub.js</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETUP GUIDE -->
+  <section class="setup" id="setup">
+    <div class="section-label">Setup guide</div>
+    <h2 class="section-title">Running on your laptop in 5 steps</h2>
+    <div class="steps">
+      <div class="step-item">
+        <div class="step-num">01</div>
+        <div class="step-content">
+          <h4>Clone the repo & open in VS Code</h4>
+          <div class="code-block">
+            <span class="cm"># In your terminal</span><br>
+            git clone https://github.com/yourteam/peerprep<br>
+            cd peerprep<br>
+            code .
+          </div>
+          <p>VS Code will prompt you to install recommended extensions — click <strong>Install All</strong>.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">02</div>
+        <div class="step-content">
+          <h4>Install dependencies</h4>
+          <div class="code-block">
+            npm install<br>
+            pip install RPi.GPIO paho-mqtt requests --break-system-packages
+          </div>
+          <p>The root <code>package.json</code> installs both the client and server with one command.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">03</div>
+        <div class="step-content">
+          <h4>Copy .env and add secrets</h4>
+          <div class="code-block">
+            cp .env.example .env<br>
+            <span class="cm"># Edit .env:</span><br>
+            JWT_SECRET=your_secret_here<br>
+            MQTT_BROKER=localhost<br>
+            S3_BUCKET=your-bucket-name
+          </div>
+          <p>The JWT secret must match across all three modules. Share it at the 11 AM sync.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">04</div>
+        <div class="step-content">
+          <h4>Start all services</h4>
+          <div class="code-block">
+            npm run dev<br>
+            <span class="cm"># Starts: React client (3000), Node server (3001), coturn</span><br>
+            <br>
+            <span class="cm"># On the Pi (separate terminal):</span><br>
+            python firmware/pod_controller.py
+          </div>
+          <p>Open <code>http://localhost:3000</code> in your browser to see the dashboard.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">05</div>
+        <div class="step-content">
+          <h4>Run the smoke test</h4>
+          <div class="code-block">
+            npm test<br>
+            npm run audit<br>
+            <span class="cm"># Should show: 0 critical vulnerabilities</span>
+          </div>
+          <p>If all tests pass, you're ready to record a peer interview session. Press the pod button to start.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-logo">PeerPrep</div>
+      <div class="footer-links">
+        <a href="dashboard.html">Dashboard</a>
+        <a href="#setup">Setup</a>
+        <a href="#team">Team</a>
+      </div>
+      <div class="footer-note">Built in VS Code · Mechatronics + Cybersecurity + Electric car · 1 day</div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
